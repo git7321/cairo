@@ -1,0 +1,2 @@
+#include "cairoint.h"
+#include "cairo-fixed-private.h"

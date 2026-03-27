@@ -1,0 +1,34 @@
+#include "cairoint.h"
+
+#if CAIRO_MUTEX_IMPL_WIN32
+#if !CAIRO_WIN32_STATIC_BUILD
+
+#include <windows.h>
+
+BOOL WINAPI
+DllMain (HINSTANCE hinstDLL,
+         DWORD     fdwReason,
+         LPVOID    lpvReserved);
+
+BOOL WINAPI
+DllMain (HINSTANCE hinstDLL,
+         DWORD     fdwReason,
+         LPVOID    lpvReserved)
+{
+    switch (fdwReason) {
+        case DLL_PROCESS_ATTACH:
+            CAIRO_MUTEX_INITIALIZE ();
+            break;
+
+        case DLL_PROCESS_DETACH:
+            if (lpvReserved == NULL) {
+            CAIRO_MUTEX_FINALIZE ();
+            }
+            break;
+    }
+
+    return TRUE;
+}
+
+#endif
+#endif

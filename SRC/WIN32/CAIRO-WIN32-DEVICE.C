@@ -1,0 +1,84 @@
+#include "cairoint.h"
+#include "cairo-atomic-private.h"
+#include "cairo-device-private.h"
+#include "cairo-win32-private.h"
+
+#include <wchar.h>
+#include <windows.h>
+
+static cairo_device_t *__cairo_win32_device;
+
+static cairo_status_t
+_cairo_win32_device_flush (void *device)
+{
+    GdiFlush ();
+    return CAIRO_STATUS_SUCCESS;
+}
+
+static void
+_cairo_win32_device_finish (void *device)
+{
+}
+
+static void
+_cairo_win32_device_destroy (void *device)
+{
+    free (device);
+}
+
+static const cairo_device_backend_t _cairo_win32_device_backend = {
+    CAIRO_DEVICE_TYPE_WIN32,
+
+    NULL, NULL,
+
+    _cairo_win32_device_flush,
+    _cairo_win32_device_finish,
+    _cairo_win32_device_destroy,
+};
+
+cairo_device_t *
+_cairo_win32_device_get (void)
+{
+    cairo_win32_device_t *device;
+
+    if (__cairo_win32_device)
+	return cairo_device_reference (__cairo_win32_device);
+
+    device = malloc (sizeof (*device));
+
+    _cairo_device_init (&device->base, &_cairo_win32_device_backend);
+
+    device->compositor = _cairo_win32_gdi_compositor_get ();
+
+    if (_cairo_atomic_ptr_cmpxchg ((void **)&__cairo_win32_device, NULL, device))
+	return cairo_device_reference(&device->base);
+
+    _cairo_win32_device_destroy (device);
+    return cairo_device_reference (__cairo_win32_device);
+}
+
+unsigned
+_cairo_win32_flags_for_dc (HDC dc)
+{
+    uint32_t flags = 0;
+    int cap;
+
+    cap = GetDeviceCaps(dc, RASTERCAPS);
+    if (cap & RC_BITBLT)
+	flags |= CAIRO_WIN32_SURFACE_CAN_BITBLT;
+    if (cap & RC_STRETCHBLT)
+	flags |= CAIRO_WIN32_SURFACE_CAN_STRETCHBLT;
+    if (cap & RC_STRETCHDIB)
+	flags |= CAIRO_WIN32_SURFACE_CAN_STRETCHDIB;
+
+    if (GetDeviceCaps(dc, TECHNOLOGY) == DT_RASDISPLAY) {
+	flags |= CAIRO_WIN32_SURFACE_IS_DISPLAY;
+
+    } else {
+	cap = GetDeviceCaps(dc, SHADEBLENDCAPS);
+	if (cap != SB_NONE)
+	    flags |= CAIRO_WIN32_SURFACE_CAN_ALPHABLEND;
+    }
+
+    return flags;
+}

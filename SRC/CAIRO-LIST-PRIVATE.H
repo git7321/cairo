@@ -1,0 +1,10 @@
+#ifndef CAIRO_LIST_PRIVATE_H
+#define CAIRO_LIST_PRIVATE_H
+
+#include "cairo-compiler-private.h"
+
+typedef struct _cairo_list {
+    struct _cairo_list *next, *prev;
+} cairo_list_t;
+
+#endif /* CAIRO_LIST_PRIVATE_H */
