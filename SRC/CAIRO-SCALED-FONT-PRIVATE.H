@@ -1,0 +1,111 @@
+#ifndef CAIRO_SCALED_FONT_PRIVATE_H
+#define CAIRO_SCALED_FONT_PRIVATE_H
+
+#include "cairo.h"
+
+#include "cairo-types-private.h"
+#include "cairo-list-private.h"
+#include "cairo-mutex-type-private.h"
+#include "cairo-reference-count-private.h"
+
+CAIRO_BEGIN_DECLS
+
+typedef struct _cairo_scaled_glyph_page cairo_scaled_glyph_page_t;
+
+struct _cairo_scaled_font {
+    cairo_hash_entry_t hash_entry;
+
+    cairo_status_t status;
+    cairo_reference_count_t ref_count;
+    cairo_user_data_array_t user_data;
+
+    cairo_font_face_t *original_font_face;
+
+    cairo_font_face_t *font_face;
+    cairo_matrix_t font_matrix;
+    cairo_matrix_t ctm;
+    cairo_font_options_t options;
+
+    unsigned int placeholder : 1;
+    unsigned int holdover : 1;
+    unsigned int finished : 1;
+
+    cairo_matrix_t scale;
+    cairo_matrix_t scale_inverse;
+    double max_scale;
+    cairo_font_extents_t extents;
+    cairo_font_extents_t fs_extents;
+
+    cairo_mutex_t mutex;
+
+    cairo_hash_table_t *glyphs;
+    cairo_list_t glyph_pages;
+    cairo_bool_t cache_frozen;
+    cairo_bool_t global_cache_frozen;
+
+    cairo_list_t dev_privates;
+
+    const cairo_scaled_font_backend_t *backend;
+    cairo_list_t link;
+};
+
+struct _cairo_scaled_font_private {
+    cairo_list_t link;
+    const void *key;
+    void (*destroy) (cairo_scaled_font_private_t *,
+		     cairo_scaled_font_t *);
+};
+
+struct _cairo_scaled_glyph {
+    cairo_hash_entry_t hash_entry;
+
+    cairo_text_extents_t    metrics;
+    cairo_text_extents_t    fs_metrics;
+    cairo_box_t		        bbox;
+    int16_t                 x_advance;
+    int16_t                 y_advance;
+
+    unsigned int	        has_info;
+    cairo_image_surface_t   *surface;
+    cairo_path_fixed_t	    *path;
+    cairo_surface_t         *recording_surface;
+
+    const void		   *dev_private_key;
+    void		       *dev_private;
+    cairo_list_t       dev_privates;
+};
+
+struct _cairo_scaled_glyph_private {
+    cairo_list_t link;
+    const void *key;
+    void (*destroy) (cairo_scaled_glyph_private_t *,
+		     cairo_scaled_glyph_t *,
+		     cairo_scaled_font_t *);
+};
+
+cairo_private cairo_scaled_font_private_t *
+_cairo_scaled_font_find_private (cairo_scaled_font_t *scaled_font,
+				 const void *key);
+
+cairo_private void
+_cairo_scaled_font_attach_private (cairo_scaled_font_t *scaled_font,
+				   cairo_scaled_font_private_t *priv,
+				   const void *key,
+				   void (*destroy) (cairo_scaled_font_private_t *,
+						    cairo_scaled_font_t *));
+
+cairo_private cairo_scaled_glyph_private_t *
+_cairo_scaled_glyph_find_private (cairo_scaled_glyph_t *scaled_glyph,
+				 const void *key);
+
+cairo_private void
+_cairo_scaled_glyph_attach_private (cairo_scaled_glyph_t *scaled_glyph,
+				   cairo_scaled_glyph_private_t *priv,
+				   const void *key,
+				   void (*destroy) (cairo_scaled_glyph_private_t *,
+						    cairo_scaled_glyph_t *,
+						    cairo_scaled_font_t *));
+
+CAIRO_END_DECLS
+
+#endif /* CAIRO_SCALED_FONT_PRIVATE_H */

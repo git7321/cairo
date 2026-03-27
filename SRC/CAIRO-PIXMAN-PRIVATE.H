@@ -1,0 +1,7 @@
+#ifndef CAIRO_PIXMAN_PRIVATE_H
+#define CAIRO_PIXMAN_PRIVATE_H
+
+#include "cairo-pixman-private.h"
+#include <pixman.h>
+
+#endif

@@ -1,0 +1,169 @@
+#include "cairoint.h"
+#include "cairo-box-inline.h"
+#include "cairo-error-private.h"
+#include "cairo-path-fixed-private.h"
+
+typedef struct _cairo_path_bounder {
+    cairo_point_t current_point;
+    cairo_bool_t has_extents;
+    cairo_box_t extents;
+} cairo_path_bounder_t;
+
+static cairo_status_t
+_cairo_path_bounder_move_to (void *closure,
+			     const cairo_point_t *point)
+{
+    cairo_path_bounder_t *bounder = closure;
+
+    bounder->current_point = *point;
+
+    if (likely (bounder->has_extents)) {
+	_cairo_box_add_point (&bounder->extents, point);
+    } else {
+	bounder->has_extents = TRUE;
+	_cairo_box_set (&bounder->extents, point, point);
+    }
+
+    return CAIRO_STATUS_SUCCESS;
+}
+
+static cairo_status_t
+_cairo_path_bounder_line_to (void *closure,
+			     const cairo_point_t *point)
+{
+    cairo_path_bounder_t *bounder = closure;
+
+    bounder->current_point = *point;
+    _cairo_box_add_point (&bounder->extents, point);
+
+    return CAIRO_STATUS_SUCCESS;
+}
+
+static cairo_status_t
+_cairo_path_bounder_curve_to (void *closure,
+			      const cairo_point_t *b,
+			      const cairo_point_t *c,
+			      const cairo_point_t *d)
+{
+    cairo_path_bounder_t *bounder = closure;
+
+    _cairo_box_add_curve_to (&bounder->extents,
+			     &bounder->current_point,
+			     b, c, d);
+    bounder->current_point = *d;
+
+    return CAIRO_STATUS_SUCCESS;
+}
+
+static cairo_status_t
+_cairo_path_bounder_close_path (void *closure)
+{
+    return CAIRO_STATUS_SUCCESS;
+}
+
+cairo_bool_t
+_cairo_path_bounder_extents (const cairo_path_fixed_t *path,
+			     cairo_box_t *extents)
+{
+    cairo_path_bounder_t bounder;
+    cairo_status_t status;
+
+    bounder.has_extents = FALSE;
+    status = _cairo_path_fixed_interpret (path,
+					  _cairo_path_bounder_move_to,
+					  _cairo_path_bounder_line_to,
+					  _cairo_path_bounder_curve_to,
+					  _cairo_path_bounder_close_path,
+					  &bounder);
+    assert (!status);
+
+    if (bounder.has_extents)
+	*extents = bounder.extents;
+
+    return bounder.has_extents;
+}
+
+void
+_cairo_path_fixed_approximate_clip_extents (const cairo_path_fixed_t *path,
+					    cairo_rectangle_int_t *extents)
+{
+    _cairo_path_fixed_approximate_fill_extents (path, extents);
+}
+
+void
+_cairo_path_fixed_approximate_fill_extents (const cairo_path_fixed_t *path,
+					    cairo_rectangle_int_t *extents)
+{
+    _cairo_path_fixed_fill_extents (path, CAIRO_FILL_RULE_WINDING, 0, extents);
+}
+
+void
+_cairo_path_fixed_fill_extents (const cairo_path_fixed_t	*path,
+				cairo_fill_rule_t	 fill_rule,
+				double			 tolerance,
+				cairo_rectangle_int_t	*extents)
+{
+    if (path->extents.p1.x < path->extents.p2.x &&
+	path->extents.p1.y < path->extents.p2.y) {
+	_cairo_box_round_to_rectangle (&path->extents, extents);
+    } else {
+	extents->x = extents->y = 0;
+	extents->width = extents->height = 0;
+    }
+}
+
+void
+_cairo_path_fixed_approximate_stroke_extents (const cairo_path_fixed_t *path,
+					      const cairo_stroke_style_t *style,
+					      const cairo_matrix_t *ctm,
+					      cairo_rectangle_int_t *extents)
+{
+    if (path->has_extents) {
+	cairo_box_t box_extents;
+	double dx, dy;
+
+	_cairo_stroke_style_max_distance_from_path (style, path, ctm, &dx, &dy);
+
+	box_extents = path->extents;
+	box_extents.p1.x -= _cairo_fixed_from_double (dx);
+	box_extents.p1.y -= _cairo_fixed_from_double (dy);
+	box_extents.p2.x += _cairo_fixed_from_double (dx);
+	box_extents.p2.y += _cairo_fixed_from_double (dy);
+
+	_cairo_box_round_to_rectangle (&box_extents, extents);
+    } else {
+	extents->x = extents->y = 0;
+	extents->width = extents->height = 0;
+    }
+}
+
+cairo_status_t
+_cairo_path_fixed_stroke_extents (const cairo_path_fixed_t	*path,
+				  const cairo_stroke_style_t	*stroke_style,
+				  const cairo_matrix_t		*ctm,
+				  const cairo_matrix_t		*ctm_inverse,
+				  double			 tolerance,
+				  cairo_rectangle_int_t		*extents)
+{
+    cairo_polygon_t polygon;
+    cairo_status_t status;
+
+    _cairo_polygon_init (&polygon, NULL, 0);
+    status = _cairo_path_fixed_stroke_to_polygon (path,
+						  stroke_style,
+						  ctm, ctm_inverse,
+						  tolerance,
+						  &polygon);
+    _cairo_box_round_to_rectangle (&polygon.extents, extents);
+    _cairo_polygon_fini (&polygon);
+
+    return status;
+}
+
+cairo_bool_t
+_cairo_path_fixed_extents (const cairo_path_fixed_t *path,
+			   cairo_box_t *box)
+{
+    *box = path->extents;
+    return path->has_extents;
+}
